@@ -1,0 +1,141 @@
+            .ORG    0000 
+
+STACKS      EQU     0xFFFF 
+ACIA_DATA   EQU     0x08 
+ACIA_STAT   EQU     0x09 
+ACIA_CMD    EQU     0x0A 
+ACIA_CTL    EQU     0x0B 
+
+
+
+MAIN:                
+
+; set stack pointer
+            LD      SP,STACKS 
+
+
+; test io ports
+            LD      a,0x01 
+            OUT     (0x00),a 
+;NOP
+;LD      a,0x00
+;OUT     (0x00),a
+;NOP
+            IN      a,(0x00) 
+            OUT     (0x00),a 
+            NOP      
+            LD      a,0xFF 
+            OUT     (0x00),a 
+;NOP
+            LD      a,0x00 
+            OUT     (0x00),a 
+            NOP      
+
+; acia 6551 init
+
+            LD      a,%00000000 ;software reset
+            OUT     (ACIA_CMD),a 
+            LD      a,%00001011 ;no parity, no echo, no interrupt
+            OUT     (ACIA_CMD),a 
+            LD      a,%00011111 ;1 stop bit, 8 data bits, 19200 baud
+            OUT     (ACIA_CTL),a 
+
+            JP      OLDTEST 
+
+
+LOOP:                
+; ahow 1
+            LD      a,0x01 
+            OUT     (0x00),a 
+
+            LD      b,%00010000 ; 
+            IN      a,(ACIA_STAT) 
+            AND     b 
+            JP      z,TXW1 
+
+            LD      a,$20 
+            OUT     (ACIA_DATA),a 
+
+
+TXW1:                
+            LD      b,%00001000 ; 
+            IN      a,(ACIA_STAT) 
+            AND     b 
+            JP      z,RXW 
+
+            IN      a,(ACIA_DATA) 
+            ld      c, a
+
+RXW:
+            LD      a,0x00 
+            OUT     (0x00),a 
+
+            LD      b,%00010000 ; 
+            IN      a,(ACIA_STAT) 
+            AND     b 
+            JP      z,TXW2 
+
+            ld      a, c
+            OUT     (ACIA_DATA),a 
+TXW2:                
+
+
+            JP      loop 
+
+
+OLDTEST:             
+; show cmd reg
+            IN      a,(ACIA_CMD) 
+            OUT     (0x00),a 
+            NOP      
+            LD      a,0x00 
+            OUT     (0x00),a 
+            NOP      
+
+; show ctl reg
+            IN      a,(ACIA_CTL) 
+            OUT     (0x00),a 
+            NOP      
+            LD      a,0x00 
+            OUT     (0x00),a 
+            NOP      
+
+; show stat reg
+            IN      a,(ACIA_STAT) 
+            OUT     (0x00),a 
+            NOP      
+            LD      a,0x00 
+            OUT     (0x00),a 
+            NOP      
+
+; transmit char
+
+
+            LD      a,$68 
+            OUT     (ACIA_DATA),a 
+            NOP      
+
+            LD      a,$65 
+            OUT     (ACIA_DATA),a 
+            NOP      
+
+            LD      a,$6C 
+            OUT     (ACIA_DATA),a 
+            NOP      
+
+            LD      a,$6C 
+            OUT     (ACIA_DATA),a 
+            NOP      
+
+            LD      a,$6f 
+            OUT     (ACIA_DATA),a 
+            NOP      
+
+            LD      a,$20 
+            OUT     (ACIA_DATA),a 
+            NOP      
+
+
+            JP      loop 
+
+
