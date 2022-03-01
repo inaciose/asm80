@@ -1,0 +1,109 @@
+            .ORG    0000 
+
+STACKS      EQU     0xFFFF 
+
+MAIN:                
+
+; set stack pointer
+            LD      SP,STACKS 
+
+
+; test io ports
+            LD      a,0x01 
+            OUT     (0x00),a 
+            NOP      
+            LD      a,0x00 
+            OUT     (0x00),a 
+            NOP      
+            IN      a,(0x00) 
+            OUT     (0x00),a 
+            NOP      
+            LD      a,0xFF 
+            OUT     (0x00),a 
+            NOP      
+
+
+; go to memory check
+
+            LD      c,0x05 
+            LD      HL,0xF000 
+            LD      a,c 
+            OUT     (0x00),a 
+            NOP      
+
+            LD      b,0xaa 
+            LD      (HL),b
+            LD      a,(HL)
+            
+            OUT     (0x00),a 
+            NOP      
+
+
+            LD      c,0x04 
+            LD      HL,0x8000 
+            LD      a,c 
+            OUT     (0x00),a 
+            NOP      
+
+;POP HL
+            LD      b,0xaa 
+            LD      (HL),b
+            LD      a,(HL)
+            
+            OUT     (0x00),a 
+            NOP      
+
+
+            LD      c,0x03 
+            LD      HL,0x4000 
+            LD      a,c 
+            OUT     (0x00),a 
+            NOP      
+
+;POP HL
+            LD      b,0xaa 
+            LD      (HL),b
+            LD      a,(HL)
+            
+            OUT     (0x00),a 
+            NOP      
+
+
+            LD      c,0x02 
+            LD      HL,0x2000 
+            LD      a,c 
+            OUT     (0x00),a 
+            NOP      
+
+;POP HL
+            LD      b,0xaa 
+            LD      (HL),b 
+            LD      a,(HL)
+            
+            OUT     (0x00),a 
+            NOP      
+
+
+            LD      c,0x01 
+            LD      HL,0x1000 
+            LD      a,c 
+            OUT     (0x00),a 
+            NOP      
+
+;POP HL
+            LD      b,0xaa 
+            LD      (HL),b 
+            LD      a,(HL)
+            
+            OUT     (0x00),a 
+            NOP      
+
+
+            JP      main 
+
+
+
+
+
+
+
