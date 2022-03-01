@@ -1,0 +1,41 @@
+org $0000
+
+; acia 6551 io addresses
+ACIA_DATA   EQU     0x08 
+ACIA_STAT   EQU     0x09 
+ACIA_CMD    EQU     0x0A 
+ACIA_CTL    EQU     0x0B 
+
+; acia 6551 init
+acia6551_init:
+
+            LD      a, %00000000 ;software reset
+            OUT     (ACIA_CMD),a
+            LD      a, %00001011 ;no parity, no echo, no interrupt
+            OUT     (ACIA_CMD),a
+            LD      a, %00011111 ;1 stop bit, 8 data bits, 19200 baud
+            OUT     (ACIA_CTL),a
+            
+            
+main:
+            LD      b,%00010000 ; check transmit status
+            IN      a,(ACIA_STAT) 
+            AND     b 
+            JP      z,TXW1 
+
+            LD      a,$68 
+            OUT     (ACIA_DATA),a 
+            
+TXW1:   
+            LD      b,%00010000 ;check transmit status
+            IN      a,(ACIA_STAT) 
+            AND     b 
+            JP      z,TXW2      ;jump if not set
+
+            LD      a,$20 
+            OUT     (ACIA_DATA),a 
+TXW2:   
+
+            jp main
+            
+            
