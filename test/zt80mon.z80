@@ -1,0 +1,219 @@
+;
+; Zt80MON
+; ACIA 6551A SERIAL IO (BASIC)
+;
+ 
+; memmap
+
+STACKSYS    EQU     $FF00
+;ROMBASE     EQU     $0000
+MONROMDATA  EQU     $0700
+;RAMBASE     EQU     $8000
+MONRAMDATA  EQU     $FF01
+
+; IO
+; ACIA6551 ADDRESS
+ACIA_DATA   EQU     0x08 
+ACIA_STAT   EQU     0x09 
+ACIA_CMD    EQU     0x0A 
+ACIA_CTL    EQU     0x0B 
+
+
+            .ORG    $0000 
+
+MAIN:                
+
+            ; set stack pointer
+            LD      SP,STACKSYS 
+            
+            ; test io ports (leds)
+            CALL    INIT_IOTEST
+            
+            ; 6551A init
+            CALL    INIT_HARDWARE
+
+            ; hello serial output
+            CALL    OUTCHAR 
+            
+            LD      HL, STR_ZTMON
+            CALL    PRINT_STRING
+            LD      HL, STR_ZTMVER
+            CALL    PRINT_STRING
+
+
+LOOP:                
+; serial console echo
+            CALL    INCHAR 
+; char received ?
+            LD      c,b 
+            LD      b,%00001000 
+            AND     b 
+            JP      nz,INC_IDLE 
+; yes get received char
+            LD      a,c 
+            CALL    OUTCHAR 
+
+INC_IDLE:            
+; no received char
+            JP      LOOP 
+
+
+OUTCHAR:
+            CALL    A6551_OUTCHAR
+            RET
+            
+INCHAR:
+            CALL A6551_INCHAR
+            RET
+
+; 
+; INIT_HARDWARE
+; no arguments
+; no return
+; 
+INIT_HARDWARE:
+            CALL    A6551_INIT
+            RET
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 6551 driver
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; 
+; 6551_INIT
+; no arguments
+; no return
+;
+A6551_INIT:
+; acia 6551 init
+            LD      a,%00000000 ;software reset
+            OUT     (ACIA_CMD),a 
+            LD      a,%00001011 ;no parity, no echo, no interrupt
+            OUT     (ACIA_CMD),a 
+            LD      a,%00011111 ;1 stop bit, 8 data bits, 19200 baud
+            OUT     (ACIA_CTL),a
+            RET
+
+; 
+; OUTCHAR
+; arguments
+; a = char to output
+; 
+A6551_OUTCHAR:             
+            LD      c,a 
+A6551_OUTCHART:            
+; check transmit flag is set
+            LD      b,%00010000 ; 
+            IN      a,(ACIA_STAT) 
+;OUT     ($00),a         ;show stat on leds
+            AND     b 
+            JP      z,A6551_OUTCHART 
+; send char
+            LD      a,c 
+            OUT     (ACIA_DATA),a 
+            RET      
+; 
+; OUTCHAR
+; no arguments
+; return
+; a = 0 or %00001000 (char received / char received)
+; b = received char code
+; 
+A6551_INCHAR:              
+            LD      c,$00 
+; check receiv flag is set
+            LD      b,%00001000 
+            IN      a,(ACIA_STAT) 
+;OUT     ($00),a         ;show stat on leds
+            AND     b 
+            JP      z,A6551_INCHAR_ 
+; read receive register
+            IN      a,(ACIA_DATA) 
+            LD      c,a 
+            LD      b,$00 
+A6551_INCHAR_:             
+; no received char
+            LD      a,b 
+            LD      b,c 
+            RET      
+
+;
+; show 6551 registers on leds
+; no arguments
+; no return
+;
+A6551_STATUS:     
+; led show FF
+            LD      a,$FF 
+            OUT     ($00),a 
+; show cmd reg
+            IN      a,(ACIA_CMD) 
+            OUT     ($00),a 
+; show ctl reg
+            IN      a,(ACIA_CTL) 
+            OUT     ($00),a 
+; show stat reg
+            IN      a,(ACIA_STAT) 
+            OUT     ($00),a 
+            RET 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; DEBUG CODE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;
+; LED HELLO WORLD
+; no arguments
+; no return
+;
+INIT_IOTEST:
+; test io ports
+            LD      a,0x01 
+            OUT     (0x00),a 
+            IN      a,(0x00) 
+            OUT     (0x00),a 
+            LD      a,0xFF 
+            OUT     (0x00),a 
+            LD      a,0x00 
+            OUT     (0x00),a 
+            NOP      
+            RET
+
+OUT_HELLO: 
+; hello serial output
+            LD      a,$68 
+            CALL    OUTCHAR 
+            LD      a,$65 
+            CALL    OUTCHAR 
+            LD      a,$6C 
+            CALL    OUTCHAR 
+            LD      a,$6C 
+            CALL    OUTCHAR 
+            LD      a,$6F 
+            CALL    OUTCHAR 
+            LD      a,$0A 
+            CALL    OUTCHAR 
+            LD      a,$0D 
+            CALL    OUTCHAR 
+            RET
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; STRINGS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; 
+; PRINT_STRING
+; arguments
+; a = sstring start address
+; 
+PRINT_STRING:
+	ld		a, (hl)
+	cp		$00
+	ret		z
+	call	OUTCHAR
+	inc		hl
+	jr		PRINT_STRING
+
+
+            .org MONROMDATA
+STR_ZTMON   .DB "ZT80mon\n\r", 0
+STR_ZTMVER  .DB "v0.001\n\r", 0
+
