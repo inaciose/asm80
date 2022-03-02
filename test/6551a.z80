@@ -48,27 +48,33 @@ HELLO:
             CALL    OUTCHAR 
             LD      a,$0A 
             CALL    OUTCHAR 
+            LD      a,$0D 
+            CALL    OUTCHAR 
             
             ;JP      HELLO
 
 LOOP:                
-            LD      a,$01
-            OUT     (0x00),a
+            ;led debug
+            ;LD      a,$01
+            ;OUT     (0x00),a
             
-            LD      a,$21 
+            ;LD      a,$21 
+            ;CALL    OUTCHAR 
+
+            ;led debug
+            ;LD      a,$00
+            ;OUT     (0x00),a
+
+            CALL    INCHAR
+            LD      c, b
+            LD      b,%00001000 
+            AND     b 
+            JP      nz,INC_IDLE
+            
+            LD      a, c
             CALL    OUTCHAR 
 
-            LD      a,$00
-            OUT     (0x00),a
-
-            CALL    INCHAR 
-            ;LD      b,%00001000 ; 
-            ;AND     b 
-            ;JP      nz,INC_IDLE 
-            LD      a, b
-            CALL    OUTCHAR 
-
-;INC_IDLE:            
+INC_IDLE:            
 
             JP      LOOP 
 
@@ -79,42 +85,34 @@ OUTCHAR:
 OUTCHART:
 ; show leds
 ;            LD      a,0x01
-;            OUT     (0x00),a
-; check transmit flag is set
+;            OUT     ($00),a
+            ; check transmit flag is set
             LD      b,%00010000 ; 
             IN      a,(ACIA_STAT) 
-            OUT     (0x00),a
+            OUT     ($00),a         ;show stat on leds
             AND     b 
             JP      z,OUTCHART 
-; send char
+            ; send char
             LD      a,c 
             OUT     (ACIA_DATA),a 
             RET      
 
-
 INCHAR:              
             LD      c,$00 
-; show leds
-            LD      a,0x02
-            OUT     (0x00),a
+            ; show leds
+            LD      a,$02
+            OUT     ($00),a
 
 ;            LD      c,$00
             IN      a,(ACIA_STAT) 
-            ;LD      b,%00000100
-            ;AND     b
-            ;JP      z,INCHARN
-            
-            ;IN      a,(ACIA_DATA)
-            
-;INCHARN:            
+            ; show leds
+            OUT     ($00),a
+           
             LD      b,%00001000
-            
-; show leds
-            OUT     (0x00),a
-
             AND     b 
             JP      z,INCHAR_ 
 
+            ; read receive register
             IN      a,(ACIA_DATA) 
             LD      c,a 
             LD      b,$00 
@@ -125,74 +123,24 @@ INCHAR_:
             RET      
 
 
-
-
-
-
-
-
-
-OLDLOOP:             
-; ahow 1
-            LD      a,0x01 
-            OUT     (0x00),a 
-            NOP      
-
-
+ACIA6551_STATUS:             
+; led show FF
+            LD      a,$FF 
+            OUT     ($00),a 
 
 ; show cmd reg
             IN      a,(ACIA_CMD) 
-            OUT     (0x00),a 
-            NOP      
-            LD      a,0x00 
-            OUT     (0x00),a 
-            NOP      
+            OUT     ($00),a 
 
 ; show ctl reg
             IN      a,(ACIA_CTL) 
-            OUT     (0x00),a 
-            NOP      
-            LD      a,0x00 
-            OUT     (0x00),a 
-            NOP      
+            OUT     ($00),a 
 
 ; show stat reg
             IN      a,(ACIA_STAT) 
-            OUT     (0x00),a 
-            NOP      
-            LD      a,0x00 
-            OUT     (0x00),a 
-            NOP      
-
-; transmit char
-
-
-            LD      a,$68 
-            OUT     (ACIA_DATA),a 
-            NOP      
-
-            LD      a,$65 
-            OUT     (ACIA_DATA),a 
-            NOP      
-
-            LD      a,$6C 
-            OUT     (ACIA_DATA),a 
-            NOP      
-
-            LD      a,$6C 
-            OUT     (ACIA_DATA),a 
-            NOP      
-
-            LD      a,$6f 
-            OUT     (ACIA_DATA),a 
-            NOP      
-
-            LD      a,$20 
-            OUT     (ACIA_DATA),a 
-            NOP      
-
+            OUT     ($00),a 
+      
 
             JP      loop 
-
 
 
