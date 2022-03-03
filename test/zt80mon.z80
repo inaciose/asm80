@@ -1,17 +1,30 @@
-;
+; 
 ; Zt80MON
 ; ACIA 6551A SERIAL IO (BASIC)
+; 
+
+; monitor code based on the work of Luke Maurits
+; https://github.com/lmaurits/lm512
 ;
- 
+; I mainly use code from the following files:
+; - cli.z80 (1st half)
+; - string.z80 (Binary to decimal stuff removed)
+; - monitor.z80 (without: cfload, cfsave, continue, bank, memcpy, stack, push, pop commands)
+;
+; the code is striped to be less than 2k (an 28C16 eeprom size)
+;
+; more about his work
+; http://www.luke.maurits.id.au/projects/computers/lm512/
+;
+
+
 ; memmap
 
-STACKSYS        EQU     $FF00
-;ROMBASE        EQU     $0000
-MONROMDATA      EQU     $0700
-;RAMBASE        EQU     $8000
-MONRAMDATA      EQU     $FF01
-
-CLI_LINE_MAX    EQU     $0F
+STACKSYS    EQU     $FF00 
+;ROMBASE    EQU     $0000
+MONROMDATA  EQU     $0700 
+;RAMBASE    EQU     $8000
+MONRAMDATA  EQU     $FF01 
 
 ; IO
 ; ACIA6551 ADDRESS
@@ -20,120 +33,110 @@ ACIA_STAT   EQU     0x09
 ACIA_CMD    EQU     0x0A 
 ACIA_CTL    EQU     0x0B 
 
+;--------------------------------------------
 
             .ORG    $0000 
 
 MAIN:                
 
-            ; set stack pointer
+; set stack pointer
             LD      SP,STACKSYS 
-            
-            ; test io ports (leds)
-            CALL    INIT_IOTEST
-            
-            ; 6551A init
-            CALL    INIT_HARDWARE
 
-            ; hello serial output
-            CALL    OUT_HELLO 
-            
-            ; identify monitor
-            LD      HL, STR_ZTMON
-            CALL    PRINT_STRING
-            LD      HL, STR_ZTMVER
-            CALL    PRINT_STRING
+; test io ports (leds)
+            CALL    INIT_IOTEST 
+
+; 6551A init
+            CALL    INIT_HARDWARE 
+
+; hello serial output
+;CALL    OUT_HELLO
+
+; identify monitor
+;LD      HL, STR_ZTMON
+;CALL    PRINT_STRING
+;LD      HL, STR_ZTMVER
+;CALL    PRINT_STRING
 
 
 LOOP:                
-            ; serial console echo
-            CALL    INCHAR 
-            ; char received ?
-            LD      c,b 
-            LD      b,%00001000 
-            AND     b 
-            JP      nz,INC_IDLE 
-            ; yes, char received
-
-            OR      a                   ; clear carry flag
-            LD      hl, CLI_LINE_BUF
-            LD      de, CLI_LINE_MAX
-            ADD     hl, de
-            LD      de, (CLI_LINE_PTR)
-            SBC     hl,de
-            JR      c,INC_IDLE          ; branch on de > hl
-            
-            ; buffer not full
-            PUSH    de
-            POP     hl
-            LD      (hl), c
-            LD      hl, CLI_LINE_PTR
-            INC     (hl)
-     
-            ; out char
-            LD      a,c
-            CALL    OUTCHAR
-
-            ; Check for end of line
-	        CP		$D
-            JR      nz,INC_IDLE
-            
-            LD      a, $A
-            CALL    OUTCHAR
-            
-            LD      hl, CLI_LINE_PTR
-            LD      de, CLI_LINE_BUF
-            LD      (hl), e
-            INC     hl
-            LD      (hl),d
+            CALL    Monitor 
 
 INC_IDLE:            
 ; no received char
             JP      LOOP 
 
+;--------------------------------------------
+OUTCHAR:             
+            CALL    A6551_OUTCHAR 
+            RET      
 
-OUTCHAR:
-            CALL    A6551_OUTCHAR
-            RET
-            
-INCHAR:
-            CALL A6551_INCHAR
-            RET
+;--------------------------------------------
+INCHAR:              
+            CALL    A6551_INCHAR 
+            RET      
 
-; 
+;--------------------------------------------
+SERIAL_WRITE_A:      
+            CALL    A6551_OUTCHAR 
+            RET      
+
+;--------------------------------------------
+SERIAL_READ_A:       
+            PUSH    bc 
+
+;--------------------------------------------
+SERIAL_READ_A_LOOP:  
+            CALL    A6551_INCHAR 
+
+; char received ?
+            LD      c,b 
+            LD      b,%00001000 
+            AND     b 
+            JP      nz,SERIAL_READ_A_LOOP 
+; yes, char received
+            LD      a,c 
+            POP     bc 
+            RET      
+
+;--------------------------------------------
 ; INIT_HARDWARE
 ; no arguments
 ; no return
 ; 
-INIT_HARDWARE:
-            CALL    A6551_INIT
-            RET
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; 6551 driver
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+INIT_HARDWARE:       
+            CALL    A6551_INIT 
+            RET      
+
+;--------------------------------------------
 ; 
+; 6551 driver
+; 
+;--------------------------------------------
+
+;--------------------------------------------
 ; 6551_INIT
 ; no arguments
 ; no return
-;
-A6551_INIT:
+; 
+A6551_INIT:          
 ; acia 6551 init
             LD      a,%00000000 ;software reset
             OUT     (ACIA_CMD),a 
             LD      a,%00001011 ;no parity, no echo, no interrupt
             OUT     (ACIA_CMD),a 
             LD      a,%00011111 ;1 stop bit, 8 data bits, 19200 baud
-            OUT     (ACIA_CTL),a
-            RET
+            OUT     (ACIA_CTL),a 
+            RET      
 
-; 
+;--------------------------------------------
 ; OUTCHAR
 ; arguments
 ; a = char to output
 ; 
-A6551_OUTCHAR:             
-            LD      c,a
-            PUSH    bc
-A6551_OUTCHART:            
+A6551_OUTCHAR:       
+            LD      c,a 
+            PUSH    bc 
+A6551_OUTCHART:      
 ; check transmit flag is set
             LD      b,%00010000 ; 
             IN      a,(ACIA_STAT) 
@@ -142,18 +145,19 @@ A6551_OUTCHART:
             JP      z,A6551_OUTCHART 
 ; send char
             LD      a,c 
-            OUT     (ACIA_DATA),a
-            POP     bc
+            OUT     (ACIA_DATA),a 
+            POP     bc 
             RET      
-; 
-; OUTCHAR
+;--------------------------------------------
+; INCHAR
 ; no arguments
 ; return
 ; a = 0 or %00001000 (char received / char received)
 ; b = received char code
 ; 
-A6551_INCHAR:              
-            LD      c,$00 
+A6551_INCHAR:        
+            PUSH    de 
+            LD      d,$00 
 ; check receiv flag is set
             LD      b,%00001000 
             IN      a,(ACIA_STAT) 
@@ -162,20 +166,21 @@ A6551_INCHAR:
             JP      z,A6551_INCHAR_ 
 ; read receive register
             IN      a,(ACIA_DATA) 
-            LD      c,a 
+            LD      d,a 
             LD      b,$00 
-A6551_INCHAR_:             
+A6551_INCHAR_:       
 ; no received char
             LD      a,b 
-            LD      b,c 
+            LD      b,d 
+            POP     de 
             RET      
 
-;
+;--------------------------------------------
 ; show 6551 registers on leds
 ; no arguments
 ; no return
-;
-A6551_STATUS:     
+; 
+A6551_STATUS:        
 ; led show FF
             LD      a,$FF 
             OUT     ($00),a 
@@ -188,18 +193,20 @@ A6551_STATUS:
 ; show stat reg
             IN      a,(ACIA_STAT) 
             OUT     ($00),a 
-            RET 
+            RET      
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; DEBUG CODE
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;--------------------------------------------
+; 
+; DEBUG CODE
+; 
+;--------------------------------------------
 
-;
+; 
 ; LED HELLO WORLD
 ; no arguments
 ; no return
-;
-INIT_IOTEST:
+; 
+INIT_IOTEST:         
 ; test io ports
             LD      a,0x01 
             OUT     (0x00),a 
@@ -210,54 +217,1001 @@ INIT_IOTEST:
             LD      a,0x00 
             OUT     (0x00),a 
             NOP      
-            RET
+            RET      
 
-OUT_HELLO: 
-; hello serial output
-            LD      a,$68 
-            CALL    OUTCHAR 
-            LD      a,$65 
-            CALL    OUTCHAR 
-            LD      a,$6C 
-            CALL    OUTCHAR 
-            LD      a,$6C 
-            CALL    OUTCHAR 
-            LD      a,$6F 
-            CALL    OUTCHAR 
-            LD      a,$0A 
-            CALL    OUTCHAR 
-            LD      a,$0D 
-            CALL    OUTCHAR 
-            RET
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; STRINGS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;--------------------------------------------
 ; 
+; RESET
+; 
+;--------------------------------------------
+
+RESET:               
+            RST     0x00 
+
+;--------------------------------------------
+; 
+; STRINGS
+; 
+;--------------------------------------------
+
+CONVERTTOUPPER:      
+            PUSH    hl 
+CONVERTTOUPPER00:    
+            LD      a,(hl) 
+            CP      $0 
+            JR      z,ConvertToUpper03 
+            CP      "a" 
+            JR      z,ConvertToUpper01 
+            JR      c,ConvertToUpper02 
+            CP      "z" 
+            JR      z,ConvertToUpper01 
+            JR      nc,ConvertToUpper02 
+CONVERTTOUPPER01:    
+            SUB     32 
+            LD      (hl),a 
+CONVERTTOUPPER02:    
+            INC     hl 
+            JR      ConvertToUpper00 
+CONVERTTOUPPER03:    
+            POP     hl 
+            RET      
+
+;--------------------------------------------
+
 ; PRINT_STRING
 ; arguments
 ; a = sstring start address
 ; 
-PRINT_STRING:
-	ld		a, (hl)
-	cp		$00
-	ret		z
-	call	OUTCHAR
-	inc		hl
-	jr		PRINT_STRING
+PRINTSTRINGA:        
+            LD      a,(hl) 
+            CP      $00 
+            RET     z 
+            CALL    outchar 
+            INC     hl 
+            JR      PrintStringA 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; .MONROMDATA
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;--------------------------------------------
 
-            .org MONROMDATA
-STR_ZTMON   .DB "ZT80mon\n\r", 0
-STR_ZTMVER  .DB "v0.002\n\r", 0
+PRINT3STRINGS:       
+            CALL    PrintStringA 
+            EX      de,hl 
+            CALL    PrintStringA 
+            LD      h,b 
+            LD      l,c 
+            JR      PrintStringA 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; .MONRAMDATA
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-            .org MONRAMDATA
-CLI_LINE_BUF:    DS CLI_LINE_MAX
-CLI_LINE_PTR:    DW CLI_LINE_BUF 
+
+;--------------------------------------------
+
+READLINEA:           
+            PUSH    hl 
+            LD      b,0 
+READLINEA00:         
+            CALL    SERIAL_READ_A 
+; Check for backspace
+            CP      0x7F ; Backspace
+            JR      z,ReadLineABackspace 
+; Check for end of line
+            CP      "\r" 
+            JR      z,ReadLineA01 
+; Check for abort with ctrl-c
+            CP      0x03 ; Ctrl-C
+            JR      z,ReadLineA02 
+; If not any of the above cases, we're
+; dealing with a "real char".
+; Do we have buffer space to handle it?
+            LD      c,a ; Backup char
+            LD      a,b 
+            CP      80 
+            JR      z,ReadLineABackspaceEnd 
+            LD      a,c ; Restore char
+; We have buffer space, so echo the char,
+; store it in mem and increment the buffer
+; pointer and char count
+            CALL    SERIAL_WRITE_A 
+            LD      (hl),a 
+            INC     hl 
+            INC     b 
+            JR      ReadLineA00 
+READLINEABACKSPACE:  
+; Handle Backspace
+; Are we already at cursor?
+            LD      a,0 
+            CP      b 
+            JR      z,ReadLineABackspaceEnd 
+            DEC     hl 
+            DEC     b 
+            PUSH    hl 
+            LD      hl,BackSpaceControlSeq 
+            CALL    PrintStringA 
+            POP     hl 
+; Read next char
+            JR      ReadLineA00 
+READLINEABACKSPACEEND:  
+            LD      a,0x1B 
+            CALL    SERIAL_WRITE_A 
+            LD      a,"g" 
+            CALL    SERIAL_WRITE_A 
+            JR      ReadLineA00 
+BACKSPACECONTROLSEQ:  
+            DS      0x1B,0x5B,"D",0x1B,0x5B,"P",0x00 
+READLINEA01:         
+; Handle Enter
+            CALL    SERIAL_WRITE_A ; Echo the \r
+            LD      a,"\n" 
+            CALL    SERIAL_WRITE_A 
+; Terminate string
+            LD      (hl),$00 
+            POP     hl 
+            CP      a ; Set zero flag
+            RET      
+READLINEA02:         
+; Handle Ctrl-C
+            LD      hl,message_buffer 
+            CALL    TerminateLine 
+            LD      hl,message_buffer 
+            CALL    PrintStringA 
+            POP     hl 
+            OR      1 ; Reset zero flag
+            RET      
+
+
+;--------------------------------------------
+STRCMP:              
+            LD      a,(hl) 
+            CP      $0 
+            RET     z 
+            LD      b,a 
+            LD      a,(de) 
+            CP      $0 
+            RET     z 
+            CP      b 
+            RET     nz 
+            INC     hl 
+            INC     de 
+            JR      StrCmp 
+
+STRICTSTRCMP:        
+; Load next chars of each string
+            LD      a,(de) 
+            LD      b,a 
+            LD      a,(hl) 
+; Compare
+            CP      b 
+; Return non-zero if chars don't match
+            RET     nz 
+; Check for end of both strings
+            CP      0 ;"\0"
+; Return if strings have ended
+            RET     z 
+; Otherwise, advance to next chars
+            INC     hl 
+            INC     de 
+            JR      StrictStrCmp 
+
+STRLEN:              
+            PUSH    hl 
+            LD      b,0 
+STRLEN00:            
+            LD      a,(hl) 
+            CP      0 ;"\0"
+            JR      z,StrLen01 
+            INC     hl 
+            INC     b 
+            JR      StrLen00 
+STRLEN01:            
+            POP     hl 
+            LD      a,b 
+            RET      
+
+STRADDCHAR:          
+; Copy char in A to HL and inc
+            LD      (hl),a 
+            INC     hl 
+            RET      
+
+ISSTRDEC:            
+            PUSH    hl 
+ISSTRDEC00:          
+            LD      a,(hl) 
+; Test for end of string
+            CP      0 ;"\0"
+            JR      z,IsStrDecTrue 
+; Fail if < "0"
+            CP      "0" 
+            JR      c,IsStrDecFalse 
+; Continue if <= "9" (< "9"+1)
+            CP      "9"+1 
+            JR      c,IsStrDecContinue 
+            CP      "9" 
+; Fall through to fail otherwise
+ISSTRDECFALSE:       
+            OR      1 ; Reset zero flag
+            POP     hl 
+            RET      
+ISSTRDECTRUE:        
+            CP      a ; Set zero flag
+            POP     hl 
+            RET      
+ISSTRDECCONTINUE:    
+            INC     hl 
+            JR      IsStrDec00 
+
+ISSTRHEX:            
+            PUSH    hl 
+ISSTRHEX00:          
+            LD      a,(hl) 
+; Test for end of string
+            CP      0 ;"\0"
+            JR      z,IsStrHexTrue 
+; Fail if < "0"
+            CP      "0" 
+            JR      c,IsStrHexFalse 
+; Continue if <= "9" (< "9"+1)
+            CP      "9"+1 
+            JR      c,IsStrHexContinue 
+; Fail if < "A"
+            CP      "0" 
+            JR      c,IsStrHexFalse 
+; Continue if <= "F" (< "F"+1)
+            CP      "F"+1 
+            JR      c,IsStrHexContinue 
+; Fall through to fail otherwise
+ISSTRHEXFALSE:       
+            OR      1 ; Reset zero flag
+            POP     hl 
+            RET      
+ISSTRHEXTRUE:        
+            CP      a ; Set zero flag
+            POP     hl 
+            RET      
+ISSTRHEXCONTINUE:    
+            INC     hl 
+            JR      IsStrHex00 
+
+STRTOK:              
+            PUSH    hl ; Push start address of string
+STRTOK00:            
+            LD      a,(hl) 
+            CP      " " 
+            JR      z,StrTok01 
+            CP      0 ;"\0"
+            JR      z,StrTok02 
+            INC     hl 
+            JR      StrTok00 
+STRTOK01:            
+            LD      (hl),0 ; "\0" ; Terminate string
+STRTOK02:            
+            INC     hl ; Advance HL to	start of next string
+; Put start address of next string in DE
+            EX      de,hl 
+            POP     hl ; Pop original string start
+            RET      
+
+SKIPWHITESPACE:      
+            LD      a,(hl) 
+            CP      " " 
+            RET     nz 
+            INC     hl 
+            JR      SkipWhitespace 
+
+STRSTRIP:            
+            LD      a,(hl) 
+            CP      0 ;"\0"
+            JR      z,StrStrip01 
+            INC     hl 
+            JR      StrStrip 
+STRSTRIP01:          
+            DEC     hl 
+            LD      a,(hl) 
+            CP      " " 
+            JR      nz,StrStripEnd 
+            LD      (hl),0 ;"\0"
+            JR      StrStrip01 
+STRSTRIPEND:         
+            INC     hl 
+            RET      
+
+;--------------------------------------------
+
+
+READ8BIT:            
+; HL is a pointer to a two-char string
+; This is read as an 8 bit hex number
+; The number is stored in A
+            LD      a,(hl) ; Copy first char to A
+            CALL    Hex12 ; Convert first char
+            ADD     a,a ; Multiply by 16...
+            ADD     a,a ; ...
+            ADD     a,a ; ...
+            ADD     a,a ; ...done!
+            LD      d,a ; Store top 4 bits in D
+            INC     hl ; Advance to next char
+            LD      a,(hl) 
+            CALL    Hex12 ; Convert second char
+            OR      d ; Add back top bits
+            INC     hl ; Advance for next guy
+            RET      
+HEX12:      SUB     "0" 
+            CP      10 
+            RET     c 
+            SUB     "A"-"0"-10 
+            RET      
+
+READ16BIT:           
+; HL is a pointer to a four-char string
+; This is read as a 16 bit hex number
+; The number is stored in BC
+            CALL    Read8bit 
+            LD      b,a 
+            CALL    Read8bit 
+            LD      c,a 
+            RET      
+
+;--------------------------------------------
+
+READBCDBYTE:         
+; HL is a pointer to a two-char string
+; This is read as a decimal number (assumed <=80)
+; The number is stored in A in BCD format
+            LD      a,(hl) 
+            INC     hl 
+            SUB     "0" 
+            SLA     a 
+            SLA     a 
+            SLA     a 
+            SLA     a 
+            LD      b,a 
+            LD      a,(hl) 
+            INC     hl 
+            SUB     "0" 
+            OR      b 
+            RET      
+
+;--------------------------------------------
+
+TERMINATELINE:       
+            LD      (hl),"\n" 
+            INC     hl 
+            LD      (hl),"\r" 
+            INC     hl 
+            LD      (hl),$00 
+            RET      
+
+;--------------------------------------------
+
+STRFHEX:             
+; Convert byte in A to two-char hex and append to HL
+            LD      c,a ; a = number to convert
+            CALL    Num1 
+            LD      (hl),a 
+            INC     hl 
+            LD      a,c 
+            CALL    Num2 
+            LD      (hl),a 
+            INC     hl 
+            RET      
+NUM1:       RRA      
+            RRA      
+            RRA      
+            RRA      
+NUM2:       OR      $F0 
+            DAA      
+            ADD     a,$A0 
+            ADC     a,$40 ; Ascii hex at this point (0 to F)
+            RET      
+
+;--------------------------------------------
+; 
+; .MONITOR CLI
+; 
+;--------------------------------------------
+
+MONITOR:             
+; Backup stack pointer
+            LD      (mon_stack_backup),SP 
+            LD      sp,mon_stack+1 
+; Save all registers
+            PUSH    af 
+            PUSH    bc 
+            PUSH    de 
+            PUSH    hl 
+            EX      af,af' 
+            EXX      
+            PUSH    af 
+            PUSH    bc 
+            PUSH    de 
+            PUSH    hl 
+            EX      af,af' 
+            EXX      
+            PUSH    ix 
+            PUSH    iy 
+MONITORSTART:        
+            LD      hl,monwelcomestr 
+            CALL    PrintStringA 
+            CALL    Registers 
+            ;CALL    Stack 
+MONITORLOOP:         
+; Infinite loop of read, parse, dispatch
+            LD      hl,monpromptstr 
+            CALL    PrintStringA 
+            LD      hl,mon_linebuf 
+            CALL    ReadLineA 
+            JR      nz,MonitorLoop ; User stopped input using Ctrl-C
+            LD      hl,mon_linebuf 
+            LD      a,(hl) 
+            CP      $00 
+            JR      z,MonitorLoop 
+            CALL    MonitorHandleLine 
+            JR      MonitorLoop 
+MONITOREXIT:         
+            POP     iy 
+            POP     ix 
+            EX      af,af' 
+            EXX      
+            POP     hl 
+            POP     de 
+            POP     bc 
+            POP     af 
+            EX      af,af' 
+            EXX      
+            POP     hl 
+            POP     de 
+            POP     bc 
+            POP     af 
+; Restore original stack pointer
+            LD      SP,(mon_stack_backup) 
+            RET      
+MONWELCOMESTR:       
+            DB      "ZT80mon v0.003\r\n",0 
+MONPROMPTSTR:        
+            DB      "$ ",0 
+
+MONITORHANDLELINE:   
+            LD      bc,mon_argc 
+            LD      de,mon_dispatch_table 
+            CALL    HandleCommandLine 
+            RET      
+
+;--------------------------------------
+; 
+; COMMAND DISPATCH
+; 
+;--------------------------------------
+
+; Command strings
+
+
+;CONTINUESTR: DB     "CONTINUE",0 
+DUMPSTR:    DB      "DUMP",0 
+INSTR:      DB      "IN",0 
+HELPSTR:    DB      "HELP",0 
+JUMPSTR:    DB      "JUMP",0 
+;MEMCPYSTR:  DB      "MEMCPY",0 
+MEMEDSTR:   DB      "MEMED",0 
+REGSTR:     DB      "REGISTERS",0 
+;STACKSTR:   DB      "STACK",0 
+OUTSTR:     DB      "OUT",0 
+;PUSHSTR:    DB      "PUSH",0 
+;POPSTR:     DB      "POP",0 
+NULLSTR:    DB      0 
+
+
+; DOS.z80
+RESETSTR:   DB      "RESET",0 
+EXPECTSEXACTLYONEARGSTR:  
+            DB      " expects exactly one arg ",0 
+ADDRESSSTR:          
+            DB      "(mem address)\r\n",0 
+
+; Table linking command strings to function entry points
+MON_DISPATCH_TABLE:  
+;            DW      continuestr,Continue 
+            DW      dumpstr,Dump 
+            DW      instr,In 
+            DW      helpstr,Help 
+            DW      jumpstr,Jump 
+;            DW      memcpystr,Memcpy 
+            DW      memedstr,Memed 
+            DW      outstr,Out 
+;            DW      pushstr,Push 
+;            DW      popstr,Pop 
+            DW      regstr,Registers 
+            DW      resetstr,Reset 
+;            DW      stackstr,Stack 
+            DW      nullstr,What 
+
+;--------------------------------------------
+
+;CONTINUE:            
+; Pop the return address which leads back to the monitor loop
+;            POP     hl ; Break out of Dispatch
+;            POP     hl ; Break out of HandleCommandLine
+;            POP     hl ; Break out of MonitorHandleLine
+; Break out of monitor loop
+;            JP      MonitorExit 
+
+;--------------------------------------------
+
+DUMP:                
+; Check argument count
+            LD      a,(mon_argc) 
+            CP      1 
+            JR      z,Dump00 
+; Argc error
+            LD      hl,dumpstr 
+ONEMEMADDRESSARGCERROR:  
+            LD      de,ExpectsExactlyOneArgStr 
+            LD      bc,AddressStr 
+            JP      Print3Strings 
+DUMP00:              
+            LD      hl,(mon_argv) 
+            CALL    ValidateAddress 
+            JR      z,Dump01 
+            RET      
+DUMP01:              
+            CALL    Read16bit ; Read address into BC
+            LD      d,b 
+            LD      e,c 
+DUMPPREOUTER:        
+            LD      b,16 ; We dump 16 rows
+DUMPOUTER:           
+            PUSH    bc ; Store row counter
+            LD      hl,mon_linebuf 
+            LD      b,16 ; We dump 16 columns
+            PUSH    de ; Store mem pointer at start of row
+DUMPINNER:           
+; Print address
+            LD      a,d 
+            CALL    StrfHex 
+            LD      a,e 
+            CALL    StrfHex 
+            LD      (hl),"\t" 
+            INC     hl 
+; Print out hex version of data
+DUMPINNER2:          
+            LD      a,(de) ; Read from DE to A
+            INC     de 
+            CALL    StrfHex 
+            LD      (hl)," " 
+            INC     hl 
+            DJNZ    DumpInner2 
+; Print Separator between hex and ASCII
+            LD      (hl),"\t" 
+            INC     hl 
+; Now rewind our memory pointer to do the ascii bit
+            POP     de 
+; Print out ascii version of data
+            LD      b,16 ; We dump 16 columns
+DUMPINNER3:          
+            LD      a,(de) ; Read from DE to A
+            INC     de 
+            CP      32 
+            JR      z,HandlePrintable 
+            JR      c,HandleNonprintable 
+            CP      127 
+            JR      z,HandlePrintable 
+            JR      c,HandlePrintable 
+HANDLENONPRINTABLE:  
+            LD      a,"." ; Clobber unprintable char with dot
+HANDLEPRINTABLE:     
+            LD      (hl),a 
+; Continue loop
+            INC     hl 
+            DJNZ    DumpInner3 
+; Now termiate this line
+            CALL    TerminateLine 
+            LD      hl,mon_linebuf 
+            CALL    PrintStringA 
+            POP     bc ; Retrieve row counter
+            DJNZ    DumpOuter 
+; Ask to continue
+DUMP04:              
+            LD      hl,DumpContinueStr 
+            CALL    PrintStringA 
+            CALL    SERIAL_READ_A 
+            PUSH    af 
+            CALL    ClearLeft 
+            POP     af 
+            CP      " " 
+            JR      z,DumpPreOuter ; Continue
+            CP      0x03 
+            RET     z ; End
+            JR      Dump04 ; Ask again
+; 
+DUMPCONTINUESTR:     
+            DB      "(SPACE to continue, Ctrl-C to end)",0 
+CLEARLEFT:           
+            LD      hl,ClearLeftCode 
+            CALL    PrintStringA 
+            RET      
+CLEARLEFTCODE:       
+            DB      0x1B,0x5b 
+            DB      "1K\r",0 
+
+;--------------------------------------------
+
+IN:                  
+            LD      a,(mon_argc) 
+            CP      1 
+            JR      z,In00 
+; Argc error
+            LD      hl,instr 
+            LD      de,ExpectsExactlyOneArgStr 
+            LD      bc,InArgsStr 
+            JP      Print3Strings 
+INARGSSTR:           
+            DB      "(port)\r\n",0 
+IN00:                
+            LD      hl,(mon_argv) 
+            CALL    Read8bit 
+            LD      c,a 
+            IN      a,(c) 
+            LD      hl,mon_linebuf ; Point to start of output
+            CALL    StrfHex ; Write hex string
+            CALL    TerminateLine ; Add \n\r\0
+            LD      hl,mon_linebuf ; Print output
+            CALL    PrintStringA 
+            RET      
+
+;--------------------------------------------
+
+HELP:                
+            LD      hl,helpmessage 
+            CALL    PrintStringA 
+            RET      
+; 
+HELPMESSAGE:         
+            DB      "Monitor commands:\n\r" 
+;            DB      "CONTINUE: Resume program execution\n\r" 
+            DB      "DUMP ADDR: Hexdump 256 bytes of memory\n\r" 
+            DB      "IN PORT: Read byte from I/O port\n\r" 
+            DB      "JUMP ADDR: Jump to address\n\r" 
+;            DB      "MEMCPY DEST SRC NBYTES: Copy memory\n\r" 
+            DB      "MEMED ADDR: Edit memory\n\r" 
+            DB      "OUT PORT VAL: Write byte to I/O port\n\r" 
+;            DB      "POP: Pop from stack\n\r" 
+;            DB      "PUSH VAL: Push to stack\n\r" 
+            DB      "REGISTERS: Register dump\n\r" 
+;            DB      "STACK: Stack trace\n\r" 
+            DB      0 ;"\0"
+; 
+;--------------------------------------------
+
+JUMP:                
+            LD      a,(mon_argc) 
+            CP      1 
+            JR      z,Jump00 
+; Argc error
+            LD      hl,jumpstr 
+            JP      OneMemAddressArgcError 
+JUMP00:              
+            LD      hl,(mon_argv) 
+            CALL    ValidateAddress 
+            JR      z,Jump01 
+            RET      
+JUMP01:              
+            CALL    Read16bit 
+            LD      h,b 
+            LD      l,c 
+            JP      (hl) 
+
+;--------------------------------------------
+
+;MEMCPY:              
+     
+
+;EXPECTSEXACTLYTHREEARGSSTR:  
+;            DB      " expects exactly three args \r\n",0 
+;CFLOADARGSTR:        
+;            DB      "(mem address, start sector, sector count)\r\n",0 
+; 
+;--------------------------------------------
+
+MEMED:               
+            LD      a,(mon_argc) 
+            CP      1 
+            JR      z,Memed00 
+; Argc error
+            LD      hl,memedstr 
+            JP      OneMemAddressArgcError 
+            RET      
+MEMED00:             
+; Validate, parse and push destination
+            LD      hl,(mon_argv) 
+            CALL    ValidateAddress 
+            RET     nz 
+            CALL    Read16bit 
+            LD      d,b 
+            LD      e,c 
+MEMED01:             
+            LD      hl,mon_linebuf 
+            LD      a,d 
+            CALL    StrfHex 
+            LD      a,e 
+            CALL    StrfHex 
+            LD      (hl),"\t" 
+            INC     hl 
+            LD      a,(de) 
+            CALL    StrfHex 
+            LD      (hl)," " 
+            INC     hl 
+            LD      (hl),$0 
+            LD      hl,mon_linebuf 
+            CALL    PrintStringA 
+            CALL    ReadLineA 
+            RET     nz ; User hit Ctrl-C
+            LD      a,(hl) 
+            CP      $0 
+            JR      z,Memed02 
+            CALL    ConvertToUpper 
+            CALL    ValidateValue 
+            JR      nz,Memed01 
+            PUSH    de 
+            CALL    Read8bit 
+            POP     de 
+            LD      (de),a 
+MEMED02:             
+            INC     de 
+            JR      Memed01 
+; 
+;--------------------------------------------
+
+REGISTERS:           
+            LD      hl,reg_labels 
+            CALL    PrintStringA 
+            LD      de,mon_stack 
+            LD      b,8 
+            CALL    RegisterPrint 
+
+            LD      hl,alt_reg_labels 
+            CALL    PrintStringA 
+            LD      b,8 
+            CALL    RegisterPrint 
+
+            LD      hl,i_reg_labels 
+            CALL    PrintStringA 
+            LD      b,4 
+            CALL    RegisterPrint 
+
+            RET      
+; 
+REGISTERPRINT:       
+            LD      hl,mon_linebuf 
+REGISTERPRINTLOOP:   
+            LD      a,(de) 
+            DEC     de 
+            CALL    StrfHex 
+            LD      (hl)," " 
+            INC     hl 
+            DJNZ    RegisterPrintLoop 
+            CALL    TerminateLine 
+            LD      hl,mon_linebuf 
+            CALL    PrintStringA 
+            RET      
+
+REG_LABELS:          
+            DB      "A  F  B  C  D  E  H  L\r\n",0 
+ALT_REG_LABELS:      
+            DB      "A' F' B' C' D' E' H' L'\r\n",0 
+I_REG_LABELS:        
+            DB      "IX    IY\r\n",0 
+
+;--------------------------------------------
+
+OUT:                 
+            LD      a,(mon_argc) 
+            CP      2 
+            JR      z,OutValidate 
+; Argc error
+            LD      hl,outstr 
+            LD      de,ExpectsExactlyTwoArgsStr 
+            LD      bc,OutArgsStr 
+            JP      Print3Strings 
+OUTARGSSTR:          
+            DB      "(port, value).\r\n",0 
+OUTVALIDATE:         
+            LD      hl,(mon_argv) 
+            CALL    ValidateValue 
+            RET     nz 
+            LD      hl,(mon_argv+2) 
+            CALL    ValidateValue 
+            RET     nz 
+            LD      hl,(mon_argv) 
+            CALL    Read8bit 
+            LD      c,a 
+            PUSH    bc 
+            LD      hl,(mon_argv+2) 
+            CALL    Read8bit 
+            POP     bc 
+            OUT     (c),a 
+            RET      
+
+EXPECTSEXACTLYTWOARGSSTR:  
+            DB      " expects exactly two args ",0 
+;--------------------------------------------
+
+
+WHAT:                
+            LD      hl,whatstr 
+            CALL    PrintStringA 
+            RET      
+
+WHATSTR:    DB      "What?\n\r",0 
+
+; --------------------------------------------
+; 
+; CLI
+; 
+; --------------------------------------------
+
+PARSELINE:           
+; 
+; BC is a pointer to the argc/argv array
+;	(it gets pushed and popped around comparisons)
+; DE is used by StrTok
+; HL is a pointer to the line to parse
+; 
+; Prepare to read arguments
+; Set argc to 0
+            PUSH    hl ; Keep string pointer
+            PUSH    bc ; Keep start of argcv struct
+            INC     bc ; Skip counter
+            LD      a,0 
+            PUSH    af ; Keep arg count on stack
+PARSELINE00:         
+            CALL    StrTok 
+; If string ended in a null, we're done
+            CP      0 ;"\0" 
+            JR      z,ParseLine01 
+; DE now points to the start of the first arg
+; Load this into (BC) and increment
+            LD      a,e 
+            LD      (bc),a 
+            INC     bc 
+            LD      a,d 
+            LD      (bc),a 
+            INC     bc 
+; Increment argc
+            POP     af 
+            INC     a 
+            PUSH    af 
+; Prepare for next StrTok...
+            EX      de,hl 
+            JR      ParseLine00 
+PARSELINE01:         
+            POP     af ; Get arg count
+            POP     bc ; Set BC back to start of argcv
+            LD      (bc),a ; Store argc
+            POP     hl ; Get string pointer back
+            RET      
+
+MAPSTRING2ADDRESS:   
+; In:
+; HL points to a string
+; BC points to table of (string address, arb address) pairs
+; The table MUST be terminated with a pointer to a null str,
+; which acts as a default match
+; This function writes the matching arb address into HL
+            LD      a,(bc) 
+            LD      e,a 
+            INC     bc 
+            LD      a,(bc) 
+            LD      d,a 
+            INC     bc 
+            PUSH    bc 
+            PUSH    hl 
+            CALL    StrCmp 
+            POP     hl 
+            POP     bc 
+            JR      z,MapS2A01 ; We've matched!
+            INC     bc 
+            INC     bc 
+            JR      MapString2Address 
+MAPS2A01:            
+            LD      a,(bc) 
+            LD      l,a 
+            INC     bc 
+            LD      a,(bc) 
+            LD      h,a 
+            RET      
+
+; Function which interprets the string pointed to by HL
+; as a command and calls the appropriate function
+DISPATCH:            
+            CALL    MapString2Address 
+            JP      (hl) 
+
+HANDLECOMMANDLINE:   
+; HL - command string pointer
+; DE - dispatch table pointer
+; BC - argc/argv structure
+            CALL    SkipWhitespace 
+            CALL    ConvertToUpper 
+            PUSH    de 
+            CALL    ParseLine 
+            POP     bc 
+            CALL    Dispatch 
+            RET      
+
+; 
+; 
+; UTILITY FUNCTIONS
+; 
+; 
+
+VALIDATEVALUE:       
+            CALL    StrLen 
+            CP      2 
+            JR      nz,ValidateValueError 
+            CALL    IsStrHex 
+            JR      nz,ValidateValueError 
+            CP      a ; Set zero flag
+            RET      
+VALIDATEVALUEERROR:  
+            CALL    PrintStringA 
+            LD      hl,IsNotAValidStr 
+            CALL    PrintStringA 
+            LD      hl,ValueErrorStr 
+            CALL    PrintStringA 
+            OR      1 ; Reset zero flag
+            RET      
+ISNOTAVALIDSTR:      
+            DB      " is not a valid ",0 
+VALUEERRORSTR:       
+            DB      "value (use 00-FF).\r\n",0 
+
+VALIDATEADDRESS:     
+            CALL    StrLen 
+            CP      4 
+            JR      nz,ValidateAddressError 
+            CALL    IsStrHex 
+            JR      nz,ValidateAddressError 
+            CP      a ; Set zero flag
+            RET      
+VALIDATEADDRESSERROR:  
+            CALL    PrintStringA 
+            LD      hl,IsNotAValidStr 
+            CALL    PrintStringA 
+            LD      hl,AddressErrorStr 
+            CALL    PrintStringA 
+            OR      1 ; Reset zero flag
+            RET      
+ADDRESSERRORSTR:     
+            DB      "address (use 0000-FFFF).\r\n",0 
+
+
+
+; 
+; .MONROMDATA
+; 
+
+            .ORG    MONROMDATA 
+STR_ZTMON:  DB      "ZT80mon\n\r",0 
+STR_ZTMVER: DB      "v0.003\n\r",0 
+
+; 
+; .MONRAMDATA
+; 
+            .ORG    MONRAMDATA 
+;CLI_LINE_BUF:    DS CLI_LINE_MAX
+;CLI_LINE_PTR:    DW CLI_LINE_BUF
+
+
+; Stuff for the monitor
+START_MON_RAM:       
+MON_LINEBUF: DS     80 
+MON_ARGC:   DS      1 
+MON_ARGV:   DS      2 
+            DS      40 
+MON_STACK:  DS      2 
+MON_STACK_BACKUP: DS 2 
+END_MON_RAM:         
+
+MESSAGE_BUFFER: DS  80 
+
+; Bin2Dec
+B2DINV:     DS      8 ; space for 64-bit input value (LSB first)
+B2DBUF:     DS      20 ; space for 20 decimal digits
+B2DEND:     DS      1 ; space for terminating 0
+
