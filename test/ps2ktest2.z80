@@ -1,0 +1,186 @@
+            .ORG    $8000 
+
+MAIN1:               
+
+
+; output hello
+            LD      A,"!" ; ASCII value of character ‘!’
+            LD      C,$02 
+            RST     $30 
+
+; clear shift registers
+            LD      A,$0 
+            OUT     ($6),A 
+LOOP:                
+
+            IN      A,($6)
+            LD      L, A
+
+            IN      A,($7) 
+            LD      H, A
+            
+            CALL    DISPHLHEX
+
+            LD      A," "
+            LD      C,$02 
+            RST     $30 
+
+            IN      A,($7) 
+            CALL    PRTBIN
+            
+            LD      A," "
+            LD      C,$02 
+            RST     $30 
+
+            IN      A,($6) 
+            CALL    PRTBIN
+
+
+; check start bit
+            ;CP      %00000010
+            ;JP      z,NOTD
+
+            ;CALL    outchar
+            ;LD      L, A
+
+            ;IN      A,($7) 
+            ;CALL    outchar 
+            ;LD      H, A
+
+; clear shift registers
+            ;LD      A,$0
+            ;OUT     ($6), A
+            
+            ;LD      C,$1E 
+            ;RST     $30 
+            ;RET  
+            
+            ;LD      H,0
+            ;LD      L,A
+
+            ;CALL    DISPHLHEX
+
+; call output newline
+            LD      C,$07 
+            RST     $30 
+
+NOTD:                
+
+            JP      LOOP 
+
+
+OUTCHAR:
+            PUSH    BC
+            PUSH    HL
+            LD      C,$02 
+            RST     $30
+            POP     HL
+            POP     BC
+            RET      
+
+
+;Display a 16- or 8-bit number in hex.
+DISPHLHEX:           
+; Input: HL
+            LD      c,h 
+            CALL    OutHex8 
+            LD      c,l 
+OUTHEX8:             
+; Input: C
+            LD      a,c 
+            RRA      
+            RRA      
+            RRA      
+            RRA      
+            CALL    Conv 
+            LD      a,c 
+CONV:                
+            AND     $0F 
+            ADD     a,$90 
+            DAA      
+            ADC     a,$40 
+            DAA      
+            ;CALL    PUTCHAR ;replace by bcall(_PutC) or similar
+            CALL    OUTCHAR
+            RET      
+
+
+;
+;
+;
+PRTBIN:
+            LD      C, A
+            BIT     7, C
+            JP      z, BINL70
+            LD      A,"1"
+            CALL    outchar
+            JP      BINL70_
+BINL70:
+            LD      A,"0"
+            CALL    outchar
+BINL70_:
+            BIT     6, C
+            JP      z, BINL60
+            LD      A,"1"
+            CALL    outchar
+            JP      BINL60_
+BINL60: 
+            LD      A,"0"
+            CALL    outchar
+BINL60_:
+            BIT     5, C
+            JP      z, BINL50
+            LD      A,"1"
+            CALL    outchar
+            JP      BINL50_
+BINL50: 
+            LD      A,"0"
+            CALL    outchar
+BINL50_:    
+            BIT     4, C
+            JP      z, BINL40
+            LD      A,"1"
+            CALL    outchar
+            JP      BINL40_
+BINL40: 
+            LD      A,"0"
+            CALL    outchar
+BINL40_:    
+            BIT     3, C
+            JP      z, BINL30
+            LD      A,"1"
+            CALL    outchar
+            JP      BINL30_
+BINL30: 
+            LD      A,"0"
+            CALL    outchar
+BINL30_:    
+            BIT     2, C
+            JP      z, BINL20
+            LD      A,"1"
+            CALL    outchar
+            JP      BINL20_
+BINL20: 
+            LD      A,"0"
+            CALL    outchar
+BINL20_:    
+            BIT     1, C
+            JP      z, BINL10
+            LD      A,"1"
+            CALL    outchar
+            JP      BINL10_
+BINL10: 
+            LD      A,"0"
+            CALL    outchar
+BINL10_:    
+            BIT     0, C
+            JP      z, BINL00
+            LD      A,"1"
+            CALL    outchar
+            JP      BINL00_
+BINL00: 
+            LD      A,"0"
+            CALL    outchar
+BINL00_:    
+
+            RET
