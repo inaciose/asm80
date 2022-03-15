@@ -1,0 +1,112 @@
+            .ORG    $8000 
+
+MAIN1:               
+
+
+; output hello
+            LD      A,"!" ; ASCII value of character ‘!’
+            LD      C,$02 
+            RST     $30 
+
+; clear shift registers
+            LD      A,$0 
+            OUT     ($6),A 
+LOOP:                
+
+            ; read LSB
+            IN      A,($6)
+            
+            ; check start bit
+            BIT     5, A
+            JP      z, NOTD
+            
+            ; get the scan code bits from LSB
+            LD      B, %11000000
+            AND     B
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            LD      C,A
+            ; LSB part its on C
+            
+            ; read MSB
+            IN      A,($7) 
+
+            ; get the scan code bits from MSB
+            LD      B, %00111111
+            AND     B
+            SLA     A
+            SLA     A
+            ; MSB part its on A
+            
+            ; mix bits to build scan code
+            OR      C
+            ; the bits are inverted because 
+            ; the not on the data signal
+            XOR     $FF
+            
+            LD      C, A
+            
+            ; return if its a ESC scan code
+            CP      $76
+            RET     z
+            
+            ; prepare hex display
+            LD      L, A
+            LD      H, $00
+            
+            PUSH BC
+            CALL    DISPHLHEX
+            POP BC
+
+; clear shift registers
+            LD      A,$0
+            OUT     ($6), A
+
+; call output newline
+            LD      C,$07 
+            RST     $30 
+
+NOTD:                
+
+            JP      LOOP 
+
+
+OUTCHAR:
+            PUSH    BC
+            PUSH    HL
+            LD      C,$02 
+            RST     $30
+            POP     HL
+            POP     BC
+            RET      
+
+
+;Display a 16- or 8-bit number in hex.
+DISPHLHEX:
+; Input: HL
+            LD      c,h 
+            CALL    OutHex8 
+            LD      c,l 
+OUTHEX8:             
+; Input: C
+            LD      a,c 
+            RRA      
+            RRA      
+            RRA      
+            RRA      
+            CALL    Conv 
+            LD      a,c 
+CONV:                
+            AND     $0F 
+            ADD     a,$90 
+            DAA      
+            ADC     a,$40 
+            DAA      
+            ;CALL    PUTCHAR ;replace by bcall(_PutC) or similar
+            CALL    OUTCHAR
+            RET      
+
