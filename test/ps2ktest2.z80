@@ -76,6 +76,9 @@ LOOP:
             ; mix bits to build scan code
             LD      A, C
             OR      D
+            ; the bits are inverted because 
+            ; the not on the data signal
+            XOR     $FF
             
             LD      L, A
             LD      H, $00
@@ -229,4 +232,3 @@ BINL00_:
 
             POP     BC
             RET
-            
