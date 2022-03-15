@@ -13,14 +13,76 @@ MAIN1:
             OUT     ($6),A 
 LOOP:                
 
+            ; read LSB
             IN      A,($6)
             LD      L, A
-
+            
+            ; check start bit
+            BIT     5, A
+            JP      z, NOTD
+            
+            ; get the scan code bits from LSB
+            LD      B, %11000000
+            AND     B
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            LD      D,A
+            ; its on D
+            
+            ; read MSB
             IN      A,($7) 
             LD      H, A
             
+            ; get the scan code bits from MSB
+            LD      B, %00111111
+            AND     B
+            SLA     A
+            SLA     A
+            LD      C, A
+            ; its on C
+            
+            PUSH    DE
+            PUSH    BC
+            
+            CALL    DISPHLHEX
+            ; print separator
+            LD      A," "
+            LD      C,$02 
+            RST     $30 
+            
+            POP     BC
+            POP     DE
+            
+            
+            LD      L, D
+            LD      H, C
+
+            PUSH    DE
+            PUSH    BC
+            
+            CALL    DISPHLHEX
+            ; print separator
+            LD      A," "
+            LD      C,$02 
+            RST     $30 
+
+            POP     BC
+            POP     DE
+            
+            ; mix bits to build scan code
+            LD      A, C
+            OR      D
+            
+            LD      L, A
+            LD      H, $00
+            
             CALL    DISPHLHEX
 
+            ; print separator
             LD      A," "
             LD      C,$02 
             RST     $30 
@@ -28,6 +90,7 @@ LOOP:
             IN      A,($7) 
             CALL    PRTBIN
             
+            ; print separator
             LD      A," "
             LD      C,$02 
             RST     $30 
@@ -35,30 +98,9 @@ LOOP:
             IN      A,($6) 
             CALL    PRTBIN
 
-
-; check start bit
-            ;CP      %00000010
-            ;JP      z,NOTD
-
-            ;CALL    outchar
-            ;LD      L, A
-
-            ;IN      A,($7) 
-            ;CALL    outchar 
-            ;LD      H, A
-
 ; clear shift registers
-            ;LD      A,$0
-            ;OUT     ($6), A
-            
-            ;LD      C,$1E 
-            ;RST     $30 
-            ;RET  
-            
-            ;LD      H,0
-            ;LD      L,A
-
-            ;CALL    DISPHLHEX
+            LD      A,$0
+            OUT     ($6), A
 
 ; call output newline
             LD      C,$07 
@@ -80,7 +122,7 @@ OUTCHAR:
 
 
 ;Display a 16- or 8-bit number in hex.
-DISPHLHEX:           
+DISPHLHEX:
 ; Input: HL
             LD      c,h 
             CALL    OutHex8 
@@ -109,6 +151,8 @@ CONV:
 ;
 ;
 PRTBIN:
+            PUSH    BC
+            
             LD      C, A
             BIT     7, C
             JP      z, BINL70
@@ -183,4 +227,6 @@ BINL00:
             CALL    outchar
 BINL00_:    
 
+            POP     BC
             RET
+            
