@@ -15,6 +15,7 @@ MAIN1:
             LD      A,$0 
             OUT     ($6),A 
 LOOP:
+            ;read scan code from hardware if is available
             CALL    KBGETCODE
 
             ; BOF debug inside scm monitor only
@@ -23,7 +24,28 @@ LOOP:
             RET     z
             ; EOF 
 
+            ; store scancode in C, because we
+            ; use it to print a newline after
+            ; a carriage return (ENTER)
+            LD      C, A
+
+            ; convert scancode to ascii
             CALL    KB2ASCII
+
+            ; print char on console is is printable
+            CALL    OUTCHAR
+            
+            ; print new line if it is an enter
+            ; carriage return is alread printed
+            ; we check the scan code, not the ascii code
+            ; so we need to match with $5A
+            LD      A, C
+            CP      $5A
+            JP      nz, LOOP
+            ; call output newline
+            LD      C,$07 
+            RST     $30
+
 
             JP      LOOP
 ;
@@ -328,32 +350,18 @@ KBSHFTOFFU:
 KBSHFTON:
             ; check caps lock
             BIT     2, (IX+0)
-            JP      z, KBSHFTOFFU
+            JP      z, KBSHFTONU
 KBSHFTONL:
             ADD     A, $20
 KBSHFTONU:            
             ;JP      KBOUTCHAR
 KBOUTCHAR:
-            CALL    OUTCHAR
-            
-            ; print new line if it is an enter
-            ; carriage return is alread printed
-            ; we check the scan code, not the ascii code
-            ; so we need to match with $5A
-            LD      A, C
-            CP      $5A
-            JP      nz, KB2ASCIIE
-            ; call output newline
-            LD      C,$07 
-            RST     $30
 
-KB2ASCIIE:            
             POP     IX
             POP     HL
             POP     BC
             
             RET
-            
 
 ;
 ; small computer monitor 
