@@ -1,0 +1,548 @@
+            .ORG    $8000 
+
+MAIN1:               
+
+
+; output hello
+            LD      A,"!"
+            LD      C,$02 
+            RST     $30 
+; output newline
+            LD      C,$07 
+            RST     $30 
+
+; clear shift registers
+            LD      A,$0 
+            OUT     ($6),A 
+LOOP:
+            CALL    KBGETCODE
+
+            ; BOF debug inside scm monitor only
+            ; return if its a ESC scan code
+            CP      $76
+            RET     z
+            ; EOF 
+
+            CALL    KB2ASCII
+
+            JP      LOOP
+;
+;
+;
+KBGETCODE:                
+            ; preserve used registers
+            PUSH    BC
+            PUSH    HL
+            PUSH    IX
+            
+            ; read LSB
+            IN      A,($6)
+            
+            ; check start bit, jump if it is zero 
+            ; (if zero, no scan code available)
+            BIT     5, A
+            JP      z, NOTD
+            
+            ; get the scan code bits from LSB
+            LD      B, %11000000
+            AND     B
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            SRL     A
+            LD      C,A
+            ; LSB part its on C
+            
+            ; read MSB
+            IN      A,($7) 
+
+            ; get the scan code bits from MSB
+            LD      B, %00111111
+            AND     B
+            SLA     A
+            SLA     A
+            ; MSB part its on A
+            
+            ; mix bits to build scan code
+            OR      C
+            ; the bits are inverted because 
+            ; the not on the data signal
+            XOR     $FF
+            
+            ; A holds the key scan code
+            ; C holds the key scan code
+            LD      C, A
+            
+            ; the scan code get from hardware is complete
+            ; next we need to interpret the scan code
+            
+            ; prepare hex display
+            ;LD      L, A
+            ;LD      H, $00
+            
+            ;PUSH    BC
+            ;CALL    DISPHLHEX
+            ;CALL    OUTHEX8
+            
+            ; separator
+            ;LD      A," "
+            ;LD      C,$02 
+            ;RST     $30 
+            
+            ;POP     BC
+            
+            ;
+            ; interpret the scan code
+            ; there are:
+            ; - multi byte scan codes
+            ; - breack codes (also multi byte)
+            ; - modifier keys like shift, alt, ctrl, capslock
+            ; all this need to be handle
+            ;
+            LD      A, C
+            ;
+            ; check if it is a multi byte start code
+            ; the multi byte scan codes are no done
+            ; it just start the handling of the extra code
+            ; and also the break extended codes
+            ; check if is a ext. start code (jump if is not)
+            CP      $E0
+            JP      nz, KBNOMB
+            ; is a multi byte start code
+            LD      IX, KBFLAGS
+            SET     1, (IX+0)
+            ; no more to do for now, just clear the shift registers
+            JP      NOTDCLR
+            
+KBNOMB:
+            ;
+            ; check if is a break code (jump if is not)
+            CP      $F0
+            JP      nz, KBNOBK
+            ; is a break code
+            LD      IX, KBFLAGS
+            SET     0, (IX+0)
+            ; no more to do for now, just clear the shift registers
+            JP      NOTDCLR
+
+KBNOBK:
+            ;
+            ; check if the keys is a modifier
+            ; shift, caps lock, ctrl, etc
+            CP      $11     ; left alt
+            JP      z, KBISMOD1
+            CP      $12     ; left shift
+            JP      z, KBISMOD2
+            CP      $14     ; left ctrl
+            JP      z, KBISMOD3
+            CP      $58     ; caps lock
+            JP      z, KBISMOD4
+            CP      $59     ; right shift
+            JP      z, KBISMOD5
+            
+            JP      KBNOMOD
+KBISMOD1:
+            ; left alt
+            ; he have a break code waiting to complete?
+            LD      IX, KBFLAGS
+            BIT     0, (IX+0)
+            JP      z, KBISMOD1A
+            ; yes, lets process the break code
+            ; reset break code flag
+            RES     0, (IX+0)
+            ; reset left alt flag
+            RES     6, (IX+0)
+            JP      NOTDCLR
+KBISMOD1A:            
+            ; no break waiting lets set the flag
+            SET     6, (IX+0)
+            JP      NOTDCLR
+
+KBISMOD2:
+            ; left shift
+            ; he have a break code waiting to complete?
+            LD      IX, KBFLAGS
+            BIT     0, (IX+0)
+            JP      z, KBISMOD2A
+            ; yes, lets process the break code
+            ; reset break code flag
+            RES     0, (IX+0)
+            ; reset left shift flag
+            RES     3, (IX+0)
+            JP      NOTDCLR
+KBISMOD2A:            
+            ; no break waiting lets set the flag
+            SET     3, (IX+0)
+            JP      NOTDCLR
+            
+KBISMOD3:
+            ; left ctrl
+            ; he have a break code waiting to complete?
+            LD      IX, KBFLAGS
+            BIT     0, (IX+0)
+            JP      z, KBISMOD3A
+            ; yes, lets process the break code
+            ; reset break code flag
+            RES     0, (IX+0)
+            ; reset left ctrl flag
+            RES     5, (IX+0)
+            JP      NOTDCLR
+KBISMOD3A:            
+            ; no break waiting lets set the flag
+            SET     5, (IX+0)
+            JP      NOTDCLR
+
+KBISMOD4:
+            ; caps lock
+            ; he have a break code waiting to complete?
+            LD      IX, KBFLAGS
+            BIT     0, (IX+0)
+            JP      z, KBISMOD4A
+            ; yes, lets process the break code
+            RES     0, (IX+0)
+            JP      NOTDCLR
+KBISMOD4A:
+            ; check if the caps lock is active
+            BIT     2, (IX+0)
+            JP      z, KBISMOD4B
+            ; is active, desactivate
+            RES     2, (IX+0)
+            JP      NOTDCLR
+KBISMOD4B:
+            ; is not active, activate
+            SET     2, (IX+0)
+            JP      NOTDCLR
+KBISMOD5:
+            ; right shift
+            ; he have a break code waiting to complete?
+            LD      IX, KBFLAGS
+            BIT     0, (IX+0)
+            JP      z, KBISMOD5A
+            ; yes, lets process the break code
+            ; reset break code flag
+            RES     0, (IX+0)
+            ; reset right shift flag
+            RES     4, (IX+0)
+            JP      NOTDCLR
+KBISMOD5A:            
+            ; no break waiting lets set the flag
+            SET     4, (IX+0)
+            JP      NOTDCLR
+
+
+KBNOMOD:
+            ; the received scan code is not a
+            ; break or a extended start code
+            ; lets check if we have a break code 
+            ; waiting to complete?
+            LD      IX, KBFLAGS
+            BIT     0, (IX+0)
+            JP      z, KBNOBKW
+            ; yes, lets process the break code
+            RES     0, (IX+0)
+            ; he have a extended code waiting to complete?
+            BIT     1, (IX+0)
+            JP      z, NOTDCLR
+            ; yes, lets process the extended code
+            RES     1, (IX+0)
+            JP      NOTDCLR
+
+KBNOBKW:
+
+; clear shift registers
+            LD      A,$0
+            OUT     ($6), A
+
+            ; return scancode in A
+            LD      A, C
+            JP      KBGETCODEE
+
+NOTDCLR:
+; alternative end of loop for 
+; break codes, multi byte start codes
+; clear shift registers
+            LD      A,$0
+            OUT     ($6), A
+            
+NOTD: 
+            ; return 0 in A
+            LD      A, 0
+
+KBGETCODEE: 
+            POP     IX
+            POP     HL
+            POP     BC
+            
+            RET 
+;
+; translate scan codes to ascii
+; tacking in account the shifts
+; and the caps lock
+;
+
+KB2ASCII:
+            ; preserve used registers
+            PUSH    BC
+            PUSH    HL
+            PUSH    IX
+            
+            LD      C, A
+            ; whe still have the scan code in C
+            ; and it is not a extend start code,
+            ; not a break code, not a modifier
+            ; may be a printable character
+            ;
+            ; convert scan code to ascii
+            LD      HL, KS2ASC
+            LD      B, $00
+            ADD     HL, BC
+            ;CALL    DISPHLHEX
+            LD      A, (HL)
+
+            CP      $41
+            JP      c, KBOUTCHAR
+            CP      $5B
+            JP      nc, KBOUTCHAR
+
+            ;select lower case or upper case
+            ;is any shift key pressed?
+            LD      IX, KBFLAGS
+            ; check left shift
+            BIT     3, (IX+0)
+            JP      nz, KBSHFTON
+            ; left shift is not pressed
+            ; check right shift
+            BIT     4, (IX+0)
+            JP      nz, KBSHFTON
+            ; right and left shift are not pressed
+KBSHFTOFF:            
+            ; check caps lock
+            BIT     2, (IX+0)
+            JP      nz, KBSHFTOFFU
+KBSHFTOFFL:
+            ADD     A, $20
+KBSHFTOFFU:
+            JP      KBOUTCHAR
+KBSHFTON:
+            ; check caps lock
+            BIT     2, (IX+0)
+            JP      z, KBSHFTOFFU
+KBSHFTONL:
+            ADD     A, $20
+KBSHFTONU:            
+            ;JP      KBOUTCHAR
+KBOUTCHAR:
+            CALL    OUTCHAR
+            
+            ; print new line if it is an enter
+            ; carriage return is alread printed
+            ; we check the scan code, not the ascii code
+            ; so we need to match with $5A
+            LD      A, C
+            CP      $5A
+            JP      nz, KB2ASCIIE
+            ; call output newline
+            LD      C,$07 
+            RST     $30
+
+KB2ASCIIE:            
+            POP     IX
+            POP     HL
+            POP     BC
+            
+            RET
+            
+
+;
+; small computer monitor 
+; outchar API wrapper
+;
+
+OUTCHAR:
+            PUSH    BC
+            PUSH    HL
+            LD      C,$02 
+            RST     $30
+            POP     HL
+            POP     BC
+            RET      
+;
+;   helper sub rotine for debug
+;
+;Display a 16- or 8-bit number in hex.
+DISPHLHEX:
+; Input: HL
+            LD      c,h 
+            CALL    OutHex8 
+            LD      c,l 
+OUTHEX8:             
+; Input: C
+            LD      a,c 
+            RRA      
+            RRA      
+            RRA      
+            RRA      
+            CALL    Conv 
+            LD      a,c 
+CONV:                
+            AND     $0F 
+            ADD     a,$90 
+            DAA      
+            ADC     a,$40 
+            DAA      
+            ;CALL    PUTCHAR ;replace by bcall(_PutC) or similar
+            CALL    OUTCHAR
+            RET      
+
+;
+; ps/2 scan code to ascii 
+; 
+
+            .ORG    $9000
+KS2ASC:     db      0
+            db      0   ;0x01	F9 pressed
+            db      0   ;
+            db      0   ;0x03	F5 pressed
+            db      0   ;0x04	F3 pressed
+            db      0   ;0x05	F1 pressed
+            db      0   ;0x06	F2 pressed
+            db      0   ;0x07	F12 pressed
+            db      0   ;
+            db      0   ;0x09	F10 pressed
+            db      0   ;0x0A	F8 pressed
+            db      0   ;0x0B	F6 pressed
+            db      0   ;0x0C	F4 pressed
+            db      $9   ;0x0D	tab pressed
+            db      '`'   ;0x0E	` (back tick) pressed
+            db      0   ;
+            db      0   ;
+            db      0   ;0x11	left alt pressed
+            db      0   ;0x12	left shift pressed
+            db      0   ;
+            db      0   ;0x14	left control pressed
+            db      'Q'   ;0x15	Q pressed
+            db      '1'   ;0x16	1 pressed
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      'Z'   ;0x1A	Z pressed
+            db      'S'   ;0x1B	S pressed
+            db      'A'   ;0x1C	A pressed
+            db      'W'   ;0x1D	W pressed
+            db      '2'   ;0x1E	2 pressed
+            db      0   ;
+            db      0   ;
+            db      'C'   ;0x21	C pressed
+            db      'X'   ;0x22	X pressed
+            db      'D'   ;0x23	D pressed
+            db      'E'   ;0x24	E pressed
+            db      '4'   ;0x25	4 pressed
+            db      '3'   ;0x26	3 pressed
+            db      0   ;
+            db      0   ;
+            db      ' '   ;0x29	space pressed
+            db      'V'   ;0x2A	V pressed
+            db      'F'   ;0x2B	F pressed
+            db      'T'   ;0x2C	T pressed
+            db      'R'   ;0x2D	R pressed
+            db      '5'   ;0x2E	5 pressed
+            db      0   ;
+            db      0   ;
+            db      'N'   ;0x31	N pressed	
+            db      'B'   ;0x32	B pressed
+            db      'H'   ;0x33	H pressed
+            db      'G'   ;0x34	G pressed
+            db      'Y'   ;0x35	Y pressed
+            db      '6'   ;0x36	6 pressed
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      'M'   ;0x3A	M pressed
+            db      'J'   ;0x3B	J pressed
+            db      'U'   ;0x3C	U pressed
+            db      '7'   ;0x3D	7 pressed
+            db      '8'   ;0x3E	8 pressed
+            db      0   ;
+            db      0   ;
+            db      ','   ;0x41	, pressed
+            db      'K'   ;0x42	K pressed
+            db      'I'   ;0x43	I pressed
+            db      'O'   ;0x44	O pressed
+            db      '0'   ;0x45	0 (zero) pressed
+            db      '9'   ;0x46	9 pressed
+            db      0   ;
+            db      0   ;
+            db      '.'   ;0x49	. pressed
+            db      '/'   ;0x4A	/ pressed
+            db      'L'   ;0x4B	L pressed
+            db      ';'   ;0x4C	 ; pressed
+            db      'P'   ;0x4D	P pressed
+            db      '-'   ;0x4E	- pressed
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      $27   ;0x52	' pressed
+            db      0   ;
+            db      '['   ;0x54	[ pressed
+            db      '='   ;0x55	= pressed
+            db      0   ;
+            db      0   ;
+            db      0   ;0x58	CapsLock pressed
+            db      0   ;0x59	right shift pressed
+            db      $D   ;0x5A	enter pressed
+            db      ']'   ;0x5B	] pressed
+            db      0   ;
+            db      $5C   ;0x5D	\ pressed
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      $8   ;0x66	backspace pressed
+            db      0   ;
+            db      0   ;
+            db      '1'   ;0x69	(keypad) 1 pressed
+            db      0   ;
+            db      '4'   ;0x6B	(keypad) 4 pressed
+            db      '7'   ;0x6C	(keypad) 7 pressed
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      '0'   ;0x70	(keypad) 0 pressed
+            db      '.'   ;0x71	(keypad) . pressed
+            db      '2'   ;0x72	(keypad) 2 pressed
+            db      '5'   ;0x73	(keypad) 5 pressed
+            db      '6'   ;0x74	(keypad) 6 pressed
+            db      '8'   ;0x75	(keypad) 8 pressed
+            db      $1B   ;0x76	escape pressed
+            db      0   ;0x77	NumberLock pressed
+            db      0   ;0x78	F11 pressed
+            db      '+'   ;0x79	(keypad) + pressed
+            db      '3'   ;0x7A	(keypad) 3 pressed
+            db      '-'   ;0x7B	(keypad) - pressed
+            db      '*'   ;0x7C	(keypad) * pressed
+            db      '9'   ;0x7D	(keypad) 9 pressed
+            db      0   ;0x7E	ScrollLock pressed
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      0   ;
+            db      0   ;0x83	F7 pressed
+            db      0   ;
+            
+            .ORG    $9100
+; KBFLAGS:
+;bit 0, break code received
+;bit 1, extended code received
+;bit 2, caps lock
+;bit 3, shift left is pressed
+;bit 4, shift right is pressed
+;bit 5, ctrl is pressed
+;bit 6, alt is pressed
+;bit 7, altGr is pressed
+KBFLAGS:    db      0
