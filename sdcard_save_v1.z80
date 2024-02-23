@@ -1,0 +1,442 @@
+                    .ORG   $8000   
+                    ; sdcard io addresses
+SDCRS:              EQU   0x40   
+SDCRD:              EQU   0x41   
+SDCWC:              EQU   0x40   
+SDCWD:              EQU   0x41   
+                    ; sdcard io status
+SDCSIDL:            EQU   0x00   
+SDCSWFN:            EQU   0x02   
+SDCSWFD:            EQU   0x04
+                    ;
+PRGADDR:            EQU   0xA000   
+PRGLEN:             EQU   0xF   
+
+; just info
+MAIN:        
+                    ;
+                    ; display start message
+                    ;
+                    ; load string  start address
+                    ld   de,STR_ZTGSDC
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30   
+                    
+                    
+                    ;
+                    ; display get save filename message
+                    ; display get load filename message
+                    ;
+                    ; load string start address
+                    ld   de,STR_IWFNAME
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30 
+                    
+                    ;
+                    ; get filename string
+                    ;
+                    ; load buffer start address
+                    ld de, LINEBUF
+                    ; load string len + 1 (for terminator)
+                    ld a, $41
+                    ; load api id
+                    ld c, $04
+                    ; call api
+                    rst   $30
+
+                    ;
+                    ; split line in save arguments
+                    ;
+                    call LINEBUF_SPLIT
+
+
+                    ;
+                    ; display label save filename
+                    ; display label load filename
+                    ;
+                    ; load string  start address
+                    ld   de,STR_IWFNAME1
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ;
+                    ; display filename
+                    ;
+                    ; load string  start address
+                    ld   de,LINEBUF
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; output nl & cr
+                    ld a, '\n'
+                    call OUTCHAR
+                    ld a, '\r'
+                    call OUTCHAR                    
+
+; just info
+STARTWFN:
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ld   de,STR_CHK_IDLE
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTWFN_OK1 
+; just info
+STARTWFN_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; exit
+                    ret
+
+STARTWFN_OK1:
+                    ;
+                    ; display ok message
+                    ;
+                    ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; start write file
+                    ld   a,$c   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ld   de,STR_CHK_NAME
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; if status != 3 exit
+                    cp   SDCSWFN
+                    jr   z,STARTWFN_OK2
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; exit                    
+                    ret                     
+                    
+STARTWFN_OK2:
+                    ;
+                    ; ready to send the file name
+                    ;
+                    ; display ok message
+                    ;
+                    ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ;
+                    ; send the file name
+                    ;
+                    push    bc
+                    push    hl
+                    call    SENDFNAME   
+                    pop     hl
+                    pop     bc
+                    
+; just info
+STARTWFD:      
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ld   de,STR_CHK_FILE
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                    ; get status
+                    IN   a,(SDCRS)   
+                    ; return if its not wfile state
+                    CP   SDCSWFD   
+                    jr   z, STARTWFD_OK
+                    
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    ; exit
+                    ret
+
+STARTWFD_OK:
+                    ;
+                    ; display ok message
+                    ;
+                    ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; point hl to start of memory
+                    LD   hl,PRGADDR   
+                    LD   b,PRGLEN   
+                    LD   c,SDCWD 
+                    
+WFDLOOPADDR:      
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+
+                    ; output one memory byte
+                    OUTI      
+                    ;LD   a,b   
+                    ;CP   $00   
+                    JP   nz,WFDLOOPADDR 
+                    
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+
+                    ; end file write
+                    LD   a,$b   
+                    OUT   (SDCWC),a   
+
+; just info
+ENDWFD:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop bc
+
+                    ; get status
+                    IN   a,(SDCRS)   
+                    ; if ok its idle state
+                    cp   SDCSIDL   
+                    jr   z,ENDWFD_OK                    
+
+                    ;
+                    ; display error message
+                    ;
+                    ld   de,STR_ERROR
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    ; exit
+                    ret
+
+ENDWFD_OK:                    
+                    ; the file is loaded
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_SAVEOK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; exit
+                    ret
+                    
+; 
+; 
+SENDFNAME:      
+                    ; point hl to start of string
+                    LD   hl,LINEBUF   
+WFNLOOPCHAR:      
+                    ; load a register with the contents of
+                    ; address pointed by hl register
+                    LD   a,(Hl)   
+                    
+                    ; print the char using scm api
+                    ; we got the chat to print in
+                    ; register a
+                    ; we need to place the api id 2
+                    ; (print char) on register c
+                    ;CALL    OUTCHAR
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push af
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    pop af
+
+                    ; send char to sdc io
+                    OUT (SDCWD),a 
+                    
+                    ; check if the its is "\0"
+                    ; string terminator
+                    CP   $00   
+                    ; return if its true
+                    RET   z
+                    
+                    INC hl   
+                    JP  WFNLOOPCHAR   
+
+; 
+; 
+OUTCHAR:      
+                    ; print char on
+                    ; register A
+                    push    bc
+                    push    hl
+                    ld      c,$02   
+                    rst     $30   
+                    pop     hl
+                    pop     bc
+                    ret
+
+;
+;
+LINEBUF_SPLIT:
+                    ; split the command line on:
+                    ; - filename
+                    ; - start address
+                    ; - len
+                    
+                    push bc
+                    push hl
+                    
+                    ;
+                    ; display ok message
+                    ;
+                    ld   de,STR_OK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+
+                    pop hl
+                    pop bc
+                    ret
+
+; 
+; 
+; 
+                    .ORG    $9000
+ROMDATA:
+STR_ZTGSDC:         DB      "ZeTuGa80 SD CARD\n\r",0
+STR_OK:             DB      "OK\n\r",0
+STR_ERROR:          DB      "ERROR\n\r",0
+
+STR_IRFNAME:        DB      "Load file name: ",0
+STR_IWFNAME:        DB      "Save file name: ",0
+
+STR_IRFNAME1:       DB      "Loading: ",0
+STR_IWFNAME1:       DB      "Saving: ",0
+
+STR_SDSTATUS_BAD:  DB      "Error: bad SD card if status\n\r",0
+STR_SDSTATUS_OK:   DB      "OK: SD card if status is good\n\r",0
+
+STR_CHK_IDLE:       DB      "Check for idle state\n\r",0
+STR_CHK_NAME:       DB      "Check for name state\n\r",0
+STR_CHK_FILE:       DB      "Check for file state\n\r",0
+
+STR_LOADOK:         DB      "File loaded\n\r",0
+STR_SAVEOK:         DB      "File saved\n\r",0
+
+                    
+                    .ORG    $A000
+RAMDATA:
+LINEBUF:            DS $81 ; 129 bytes
+FILE_NAME:          DS $41 ; 65 bytes
+FILE_START:         DS $02 ; 2 bytes
+FILE_LEN:           DS $02 ; 2 bytes
+
+
