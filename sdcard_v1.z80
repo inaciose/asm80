@@ -6,6 +6,7 @@
 ; v1.0  - load and save 
 ; v1.0a - dir added
 ; v1.0b - remove added
+; v1.0c - debug output commented
 ;
 
                     .ORG   $8000   
@@ -58,14 +59,14 @@ MAIN:
                     ;rst   $30
                     
                     ;
-                    ; display filename
+                    ; display line buffer
                     ;
                     ; load string  start address
-                    ld   de,LINEBUF
+                    ;ld   de,LINEBUF
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; output nl & cr
                     ld a, '\n'
@@ -75,10 +76,12 @@ MAIN:
 
                     call LINE_PARSE
                     
-                    ;call STARTRFN
-                    ;call STARTWFN
-                    
+                    ;
                     ; dispatch cmd
+                    ; by sequentialy 
+                    ; compare hl with de
+                    ; hl have the command
+                    ; de have the input to be tested
                     
                     ld hl, CMD_DEL
                     ld de, FILE_CMD
@@ -196,37 +199,37 @@ LINE_PARSE:
                     ;
                     pop hl
 
-                    push hl
+                    ;push hl
                     ;
                     ; display string
-                    ld   de, FILE_CMD
+                    ;ld   de, FILE_CMD
                     ; load api id
-                    ld c,$06
+                    ;ld c,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     ;
-                    pop hl
+                    ;pop hl
                     
-                    ld a, '\n';
-                    call OUTCHAR
-                    ld a, '\r';
-                    call OUTCHAR
+                    ;ld a, '\n';
+                    ;call OUTCHAR
+                    ;ld a, '\r';
+                    ;call OUTCHAR
                     
-                    push hl
+                    ;push hl
                     ;
                     ; display string
-                    ld   de, FILE_NAME
+                    ;ld   de, FILE_NAME
                     ; load api id
-                    ld c,$06
+                    ;ld c,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     ;
-                    pop hl
+                    ;pop hl
                     
-                    ld a, '\n';
-                    call OUTCHAR
-                    ld a, '\r';
-                    call OUTCHAR
+                    ;ld a, '\n';
+                    ;call OUTCHAR
+                    ;ld a, '\r';
+                    ;call OUTCHAR
 
                     
 LINE_PARSE_END:
@@ -313,11 +316,11 @@ GOT_OKHEX:
 ;
 ;--------------------------------------------------------
 STARTDFN:
-                    ld   de,STR_CMD_DEL
+                    ;ld   de,STR_CMD_DEL
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     
                     ; wait 1 ms before any
@@ -375,11 +378,11 @@ STARTDFN_OK1:
                     ; display operation
                     ;
                     ; load string start address
-                    ld   de,STR_CHK_NAME
+                    ;ld   de,STR_CHK_NAME
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
 
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -414,11 +417,11 @@ STARTDFN_OK2:
                     ;
                     ; display ok message
                     ;
-                    ld   de,STR_SDSTATUS_OK
+                    ;ld   de,STR_SDSTATUS_OK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ;
                     ; send the file name
@@ -575,7 +578,7 @@ DIRLISTLOOP:
                     ;call OUTCHAR
                     ;pop af
                     
-                    ; return if its not rfile state
+                    ; return if its not in dir list state
                     cp   SDCSDIR                     
   
                     ; directory listed
@@ -624,11 +627,11 @@ STARTWFN:
                     ; display operation
                     ;
                     ; load string start address
-                    ld   de,STR_CHK_IDLE
+                    ;ld   de,STR_CHK_IDLE
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -662,11 +665,11 @@ STARTWFN_OK1:
                     ;
                     ; display ok message
                     ;
-                    ld   de,STR_SDSTATUS_OK
+                    ;ld   de,STR_SDSTATUS_OK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -684,11 +687,11 @@ STARTWFN_OK1:
                     ; display operation
                     ;
                     ; load string start address
-                    ld   de,STR_CHK_NAME
+                    ;ld   de,STR_CHK_NAME
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -723,11 +726,11 @@ STARTWFN_OK2:
                     ;
                     ; display ok message
                     ;
-                    ld   de,STR_SDSTATUS_OK
+                    ;ld   de,STR_SDSTATUS_OK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ;
                     ; send the file name
@@ -744,11 +747,11 @@ STARTWFD:
                     ; display operation
                     ;
                     ; load string start address
-                    ld   de,STR_CHK_FILE
+                    ;ld   de,STR_CHK_FILE
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
 
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -780,11 +783,11 @@ STARTWFD_OK:
                     ;
                     ; display ok message
                     ;
-                    ld   de,STR_SDSTATUS_OK
+                    ;ld   de,STR_SDSTATUS_OK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; point hl to start of memory
                     ;ld   hl,PRGADDR
@@ -913,11 +916,11 @@ STARTRFN:
                     ; display operation
                     ;
                     ; load string start address
-                    ld   de,STR_CHK_IDLE
+                    ;ld   de,STR_CHK_IDLE
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -951,11 +954,11 @@ STARTRFN_OK1:
                     ;
                     ; display ok message
                     ;
-                    ld   de,STR_SDSTATUS_OK
+                    ;ld   de,STR_SDSTATUS_OK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -973,11 +976,11 @@ STARTRFN_OK1:
                     ; display operation
                     ;
                     ; load string start address
-                    ld   de,STR_CHK_NAME
+                    ;ld   de,STR_CHK_NAME
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
 
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -1011,11 +1014,11 @@ STARTRFN_OK2:
                     ;
                     ; display ok message
                     ;
-                    ld   de,STR_SDSTATUS_OK
+                    ;ld   de,STR_SDSTATUS_OK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ;
                     ; send the file name
@@ -1032,11 +1035,11 @@ STARTRFD:
                     ; display operation
                     ;
                     ; load string start address
-                    ld   de,STR_CHK_FILE
+                    ;ld   de,STR_CHK_FILE
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
 
                     ; wait 1 ms before any
                     ; in or out to SD card
@@ -1070,11 +1073,11 @@ STARTRFD_OK:
                     ;
                     ; display ok message
                     ;
-                    ld   de,STR_SDSTATUS_OK
+                    ;ld   de,STR_SDSTATUS_OK
                     ; load api id
-                    ld   C,$06
+                    ;ld   C,$06
                     ; call api
-                    rst   $30
+                    ;rst   $30
                     
                     ; point hl to start of memory
                     ld hl,FILE_START
@@ -1362,20 +1365,20 @@ STR_OK:             DB      "OK\n\r",0
 STR_ERROR:          DB      "ERROR\n\r",0
 
 STR_CMD             DB      "CMD: ",0
-STR_CMD_LOAD        DB      "LOAD: ",0
-STR_CMD_SAVE        DB      "SAVE: ",0
-STR_CMD_DEL         DB      "DEL: ",0
+;STR_CMD_LOAD        DB      "LOAD: ",0
+;STR_CMD_SAVE        DB      "SAVE: ",0
+;STR_CMD_DEL         DB      "DEL: ",0
 ;STR_CMD_LIST        DB      "LIST",0
 
 ;STR_LOAD:           DB      "Loading: ",0
 ;STR_SAVE:           DB      "Saving: ",0
 
 STR_SDSTATUS_BAD:   DB      "Error: bad SD card if status\n\r",0
-STR_SDSTATUS_OK:    DB      "OK: SD card if status is good\n\r",0
+;STR_SDSTATUS_OK:    DB      "OK: SD card if status is good\n\r",0
 
-STR_CHK_IDLE:       DB      "Check for idle state\n\r",0
-STR_CHK_NAME:       DB      "Check for name state\n\r",0
-STR_CHK_FILE:       DB      "Check for file state\n\r",0
+;STR_CHK_IDLE:       DB      "Check for idle state\n\r",0
+;STR_CHK_NAME:       DB      "Check for name state\n\r",0
+;STR_CHK_FILE:       DB      "Check for file state\n\r",0
 
 STR_LOADOK:         DB      "File loaded\n\r",0
 STR_SAVEOK:         DB      "File saved\n\r",0
