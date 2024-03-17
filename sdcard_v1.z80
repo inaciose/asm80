@@ -3,7 +3,8 @@
 ;
 ; uses de scm api to print and get user input
 ;
-; v1.0 - load and save
+; v1.0  - load and save 
+; v1.0a - dir added
 ;
 
                     .ORG   $8000   
@@ -18,6 +19,8 @@ SDCSWFN:            EQU   0x02
 SDCSWFD:            EQU   0x04
 SDCSRFN:            EQU   0x03   
 SDCSRFD:            EQU   0x05
+SDCSDIR:            EQU   0x10
+SDCSDFN:            EQU   0x20
                     ;
 ;PRGADDR:            EQU   0xD000   
 ;PRGLEN:             EQU   0x03   
@@ -323,12 +326,142 @@ STARTDFN:
 ;
 ;--------------------------------------------------------
 STARTLSTF:
-                    ld   de,STR_CMD_LIST
+                    ;ld   de,STR_CMD_LIST
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; get status
+                    in   a,(SDCRS)   
+                    ; exit with error message if a != 0
+                    cp   SDCSIDL   
+                    jr   z,STARTLSTF_OK1 
+; just info
+STARTLSTF_FAIL1:
+                    ;
+                    ; display error message
+                    ;
+                    ; load string start address
+                    ld   de,STR_SDSTATUS_BAD
                     ; load api id
                     ld   C,$06
                     ; call api
                     rst   $30
 
+                    ; return
+                    ret
+
+STARTLSTF_OK1:
+                    ;
+                    ; display ok message
+                    ;
+                    ;ld   de,STR_SDSTATUS_OK
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+
+                     ; start directory list
+                    ld   a,$e   
+                    out   (SDCWC),a
+                    
+                    ;
+                    ; display operation
+                    ;
+                    ; load string start address
+                    ;ld   de,STR_CHK_NAME
+                    ; load api id
+                    ;ld   C,$06
+                    ; call api
+                    ;rst   $30
+
+                    ; wait many ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 100
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+DIRLISTLOOP:
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    
+                    ; check if we have
+                    ; any byte available
+
+                    ; get status
+                    in   a,(SDCRS)
+                    
+                    ; display status
+                    ;call OUTCHAR
+                    ;push af
+                    ; output nl & cr
+                    ;ld a, '\n'
+                    ;call OUTCHAR
+                    ;ld a, '\r'
+                    ;call OUTCHAR
+                    ;pop af
+                    
+                    ; return if its not rfile state
+                    cp   SDCSDIR                     
+  
+                    ; directory listed
+                    jr  nz, ENDDIR_OK
+                    
+                    ; wait 1 ms before any
+                    ; in or out to SD card
+                    ;push bc
+                    push hl
+                    ld  de, 1
+                    ld  c, $0a
+                    rst $30
+                    pop hl
+                    ;pop bc 
+                    
+                    ; get data
+                    in   a,(SDCRD)
+                    
+                    ; display char
+                    call OUTCHAR                    
+                    
+                    jr DIRLISTLOOP
+                      
+                    
+ENDDIR_OK:
+                    ; directory was listed
+                    ;
+                    ; display end message
+                    ;
+                    ld   de,STR_DIROK
+                    ; load api id
+                    ld   C,$06
+                    ; call api
+                    rst   $30
+                    
+                    ; return
                     ret
 
 ;--------------------------------------------------------
@@ -1096,6 +1229,8 @@ STR_CHK_FILE:       DB      "Check for file state\n\r",0
 
 STR_LOADOK:         DB      "File loaded\n\r",0
 STR_SAVEOK:         DB      "File saved\n\r",0
+STR_DIROK:          DB      "List end!\n\r",0
+STR_REMOK:          DB      "File removed\n\r",0
 
 CMD_LOAD            DB      "LOAD",0
 CMD_SAVE            DB      "SAVE",0
@@ -1111,3 +1246,4 @@ FILE_CMD:           DS $10 ; 16 bytes
 FILE_NAME:          DS $41 ; 65 bytes
 LINETMP:            DS $41 ; 65 bytes
 LINEBUF:            DS $81 ; 129 bytes
+
